@@ -1,59 +1,88 @@
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
 
 public class Main {
-    private static final int ARRAY_SIZE = 10;
+    private static int[] array = new int[10];
+    private static Mutex mutex = new Mutex();
 
     public static void main(String[] args) throws InterruptedException {
         for (int i = 0; i < 3; i++) {
-            int[] array = new int[ARRAY_SIZE];
-            System.out.println("Array " + (i + 1) + ":");
-            fillArray(array);
-            printArray(array);
-            Thread thread1 = new Thread(() -> {
-                Random random = new Random();
-                for (int j = 0; j < ARRAY_SIZE; j++) {
-                    synchronized (array) {
-                        array[j] = random.nextInt(301) - 150;
-                        try {
-                            Thread.sleep(1000);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                        System.out.println("Thread 1 updated array[" + j + "]: " + array[j]);
-                    }
-                }
-            });
-            Thread thread2 = new Thread(() -> {
-                synchronized (array) {
-                    double sum = 0;
-                    for (int num : array) {
-                        sum += num;
-                    }
-                    double avg = sum / (ARRAY_SIZE - 1);
-                    array[0] = (int) avg;
-                    System.out.println("Thread 2 updated array[0]: " + array[0]);
-                }
-            });
+            array = new int[10];
+            Thread thread1 = new Thread(new FillArrayTask());
+            Thread thread2 = new Thread(new ModifyArrayTask());
             thread1.start();
             thread2.start();
             thread1.join();
             thread2.join();
-            System.out.println("Resulting array " + (i + 1) + ":");
-            printArray(array);
+            System.out.println("Массив " + (i + 1) + ": " + java.util.Arrays.toString(array));
         }
     }
 
-    private static void fillArray(int[] array) {
-        Random random = new Random();
-        for (int i = 0; i < ARRAY_SIZE; i++) {
-            array[i] = random.nextInt(301) - 150;
+    private static class FillArrayTask implements Runnable {
+        @Override
+        public void run() {
+            Random random = new Random();
+            for (int i = 0; i < 10; i++) {
+                mutex.lock();
+                try {
+                    array[i] = random.nextInt(100) + 1;
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                } finally {
+                    mutex.unlock();
+                }
+            }
         }
     }
 
-    private static void printArray(int[] array) {
-        for (int i = 0; i < ARRAY_SIZE; i++) {
-            System.out.print(array[i] + " ");
+    private static class ModifyArrayTask implements Runnable {
+        @Override
+        public void run() {
+            mutex.lock();
+            try {
+                double sum = 0;
+                for (int i = 0; i < 10; i++) {
+                    sum += array[i];
+                }
+                double average = sum / 10;
+                array[0] = (int) average;
+                for (int i = 1; i < 10; i++) {
+                    array[i] *= 2;
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } finally {
+                mutex.unlock();
+            }
         }
-        System.out.println();
+    }
+
+    private static class Mutex {
+        private boolean locked = false;
+        private Thread owner = null;
+        private int count = 0;
+
+        public synchronized void lock() throws InterruptedException {
+            Thread callingThread = Thread.currentThread();
+            while (locked && owner != callingThread) {
+                wait();
+            }
+            locked = true;
+            owner = callingThread;
+            count++;
+        }
+
+        public synchronized void unlock() {
+            if (Thread.currentThread() != owner) {
+                throw new IllegalMonitorStateException("Calling thread does not hold the lock");
+            }
+            count--;
+            if (count == 0) {
+                locked = false;
+                owner = null;
+                notify();
+            }
+        }
     }
 }
