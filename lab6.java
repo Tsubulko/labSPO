@@ -2,51 +2,51 @@ import java.util.Random;
 import java.util.concurrent.Semaphore;
 
 public class Main {
+    private static final int ARRAY_SIZE = 10;
+    private static final int MAX_VALUE = 500;
+    private static final int SEMAPHORE_PERMITS = 1;
 
-    public static void main(String[] args) {
-        final int n = 10;
-        final int max = 500;
+    private static int[] array = new int[ARRAY_SIZE];
+    private static int result = 1;
 
-        int[] arr = new int[n];
-        Semaphore sem = new Semaphore(0);
+    private static Semaphore semaphore = new Semaphore(SEMAPHORE_PERMITS);
 
-        Thread producer = new Thread(() -> {
-            Random rand = new Random();
-            for (int i = 0; i < n; i++) {
-                arr[i] = rand.nextInt(max + 1);
-                System.out.println("Producer: added " + arr[i]);
+    public static void main(String[] args) throws InterruptedException {
+        Thread thread1 = new Thread(() -> {
+            Random random = new Random();
+            for (int i = 0; i < ARRAY_SIZE; i++) {
+                int number = random.nextInt(MAX_VALUE + 1);
+                array[i] = number;
+                System.out.println("Поток 1: " + number);
                 try {
-                    Thread.sleep(1000);
+                    Thread.sleep(500); 
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
             }
-            sem.release();
         });
 
-        Thread consumer = new Thread(() -> {
-            long prod = 1;
+        Thread thread2 = new Thread(() -> {
             try {
-                sem.acquire();
+                semaphore.acquire(); 
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-            for (int i = 0; i < n; i++) {
-                if (arr[i] % 2 == 0) {
-                    prod *= arr[i];
-                    System.out.println("Consumer: multiplied by " + arr[i] + ", current product = " + prod);
+
+            for (int i = 0; i < ARRAY_SIZE; i++) {
+                if (array[i] % 2 == 0) {
+                    result *= array[i];
                 }
             }
+            System.out.println("Поток 2: Result = " + result);
+
+            semaphore.release(); 
         });
 
-        producer.start();
-        consumer.start();
+        thread1.start();
+        thread2.start();
 
-        try {
-            producer.join();
-            consumer.join();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        thread1.join();
+        thread2.join();
     }
 }
